@@ -1,20 +1,21 @@
 import os
 import sys
+import math
 import torch.utils.data as data
+from random import sample
 from PIL import Image
 
-class Medianpad(data.Dataset):
+class Peroneal(data.Dataset):
     """
     Args:6
-        root (string): Root directory of the VOC Dataset.
+        root (string): Root directory of the Dataset.
         datatype (string): Dataset type 
         image_set (string): Select the image_set to use, ``train``, ``val`` or ``test``
         transform (callable, optional): A function/transform that  takes in an PIL image
             and returns a transformed version. E.g, ``transforms.RandomCrop``
         dver (str): version of dataset (ex) ``splits/v5/3``
-        kfold (int): k-fold cross validation
     """
-    def _read(self, index):
+    def read(self, index):
         """
         Args:
             index (int): Index
@@ -26,34 +27,64 @@ class Medianpad(data.Dataset):
         if not os.path.exists(self.masks[index]):
             raise FileNotFoundError
         
-        if self.is_rgb:
+        if self.in_channels == 3:
             img = Image.open(self.images[index]).convert('RGB')
             target = Image.open(self.masks[index]).convert('L')         
         else:
-            img = Image.open(self.images[index]).convert('L')
-            target = Image.open(self.masks[index]).convert('L')            
-        
-        assert((img.size ==  (640, 640)) or (img.size == (896, 640)))
+            raise Exception ("in channel must be 3")
+
+        assert( img.size == target.size == (512, 512) )
 
         return img, target
 
-    def __init__(self, root, datatype='Median', dver='splits', 
-                    image_set='train', transform=None, is_rgb=True):
+    def mktv(self, tvs):
+        """
+        Args:
+            tvs (int): split ratio
+        """
+        if not os.path.exists( os.path.join(self.root, self.datatype, self.dver, '_train.txt') ):
+            raise Exception( '_train.txt not found.' /
+                                os.path.join(self.root, self.datatype, self.dver, '_train.txt') )
+        
+        with open(os.path.join(self.root, self.datatype, self.dver, '_train.txt'), "r") as f:
+            file_names = [x.strip() for x in f.readlines()]
 
+        n = math.floor(len(file_names) / tvs)
+
+        val = sample(file_names, n)
+        train = list(set(file_names) - set(val))
+
+        with open(os.path.join(self.root, self.datatype, self.dver, 'train.txt'), 'w') as f:
+            for w in train:
+                f.write(f'{w}\n')
+        with open(os.path.join(self.root, self.datatype, self.dver, 'val.txt'), 'w') as f:
+            for w in val:
+                f.write(f'{w}\n')
+
+    def __init__(self, root, datatype='CPN', dver='splits', image_set='train', 
+                    transform=None, in_channels=3, tvs=20, **kwargs):
+        self.root = root
+        self.datatype = datatype
+        self.dver = dver
+        self.image_set = image_set
         self.transform = transform
-        self.is_rgb = is_rgb
+        self.in_channels = in_channels
 
-        image_dir = os.path.join(root, 'Median_pad', 'Images')
-        mask_dir = os.path.join(root, 'Median_pad', 'Masks')
+        if tvs < 2:
+            raise Exception("tvs must be larger than 1")
+        if image_set == 'train':
+            self.mktv(tvs=tvs)
 
+        image_dir = os.path.join(self.root, self.datatype, 'Images')
+        mask_dir = os.path.join(self.root, self.datatype, 'Masks')
+        split_f = os.path.join(self.root, self.datatype, self.dver, self.image_set.rstrip('\n') + '.txt')
+        
         if not os.path.exists(image_dir) or not os.path.exists(mask_dir):
             raise Exception('Dataset not found or corrupted.')
-        
-        split_f = os.path.join(root, 'Median_pad', dver, image_set.rstrip('\n') + '.txt')
-        
+    
         if not os.path.exists(split_f):
             raise Exception('Wrong image_set entered!' 
-                            'Please use image_set="train" or image_set="val"', split_f)
+                            'Please use image_set="train" or image_set="val"\n', split_f)
 
         with open(os.path.join(split_f), "r") as f:
             file_names = [x.strip() for x in f.readlines()]
@@ -66,23 +97,18 @@ class Medianpad(data.Dataset):
         self.image = []
         self.mask = []
         for index in range(len(self.images)):
-            img, tar = self._read(index)
+            img, tar = self.read(index)
             self.image.append(img)
             self.mask.append(tar)
 
     def __getitem__(self, index):
-        """
-        Args:
-            index (int): Index
-        Returns:
-            tuple: (image, target) where target is the image segmentation.
-        """
+
         img = self.image[index]
         target = self.mask[index]
         
         if self.transform is not None:
             img, target = self.transform(img, target)
-
+        
         return img, target
 
     def __len__(self):
@@ -98,22 +124,19 @@ if __name__ == "__main__":
     from tqdm import tqdm
 
     transform = et.ExtCompose([
-            et.ExtRandomCrop(size=(512, 512), pad_if_needed=True),
-            et.ExtScale(scale=0.5),
             et.ExtToTensor(),
             et.ExtNormalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
             ])
     
-    dst = Medianpad(root='/data1/sdi/datasets', datatype='Median', image_set='test',
-                    transform=transform, is_rgb=True, dver='splits')
-    train_loader = DataLoader(dst, batch_size=16,
+    image_set_type = ['train', 'val', 'test']
+    for ist in image_set_type:
+        dst = Peroneal(root='/home/dongik/datasets', datatype='CPN', image_set=ist,
+                    transform=transform, in_channels=3, dver='splits/v5/3', tvs=20)
+        loader = DataLoader(dst, batch_size=16,
                                 shuffle=True, num_workers=2, drop_last=True)
-    
-    for i, (ims, lbls) in tqdm(enumerate(train_loader)):
-        print(ims.shape)
-        print(lbls.shape)
-        print(lbls.numpy().sum()/(lbls.shape[0] * lbls.shape[1] * lbls.shape[2]))
-        print(1 - lbls.numpy().sum()/(lbls.shape[0] * lbls.shape[1] * lbls.shape[2]))
-        if i > 1:
-            break
-    
+        print(f'len [{ist}]: {len(dst)}')
+
+        for i, (ims, lbls) in tqdm(enumerate(loader)):
+            pass
+        
+        print('Clear !!!')

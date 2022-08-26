@@ -8,29 +8,18 @@ import datasets
 import utils
 
 HOSTNAME = {
-    "server2" : 2,
-    "server3" : 3,
-    "server4" : 4,
-    "server5" : 5
+    "server6" : 6
 }
 LOGIN = {
-    "server2" : "/mnt/server5/sdi/login.json",
-    "server3" : "/mnt/server5/sdi/login.json",
-    "server4" : "/mnt/server5/sdi/login.json",
-    "server5" : "/data1/sdi/login.json"
+    "server6" : "/home/dongik/src/login.json"
 }
 DEFAULT_PREFIX = {
-    "server2" : "/mnt/server5/sdi",
-    "server3" : "/mnt/server5/sdi",
-    "server4" : "/mnt/server5/sdi",
-    "server5" : "/data1/sdi"
+    "server6" : "/DATA/dongik"
 }
 DATA_DIR = {
-    "server2" : "/mnt/server5/sdi/datasets",
-    "server3" : "/mnt/server5/sdi/datasets",
-    "server4" : "/mnt/server5/sdi/datasets",
-    "server5" : "/data1/sdi/datasets"
+    "server6" : "/home/dongik/datasets"
 }
+
 
 def _get_argparser():
     parser = argparse.ArgumentParser()
@@ -48,8 +37,8 @@ def _get_argparser():
                         help="path to Dataset root directory (default: /)")
     parser.add_argument("--login_dir", type=str, default='/',
                         help="E-mail log-in info json file (default: /)")
-    parser.add_argument("--gpus", type=str, default="0,7",
-                        help="gpus (default: 0,7)")
+    parser.add_argument("--gpus", type=str, default="0",
+                        help="gpus (default: 0)")
 
     # Tensorboard & store params options
     parser.add_argument("--Tlog_dir", type=str, default='/',
@@ -71,9 +60,13 @@ def _get_argparser():
                               not (name.startswith("__") or name.startswith('_')) and callable(
                               network.model.__dict__[name]) )
     parser.add_argument("--model", type=str, default='deeplabv3plus_resnet50', choices=available_models,
-                        help='auxiliary model name (default: deeplabv3plus_resnet50)')
+                        help='semantic-segmentation model name (default: deeplabv3plus_resnet50)')
     parser.add_argument("--model_params", type=str, default='/',
-                        help="pretrained auxiliary network params (default: '/')")
+                        help="pretrained semantic-segmentation model params (default: '/')")
+    parser.add_argument("--vit_model", type=str, default='vit', choices=available_models,
+                        help='vit model name (default: vit)')
+    parser.add_argument("--vit_model_params", type=str, default='/',
+                        help="pretrained vit model params (default: '/')")
     # DeeplabV3+ options
     parser.add_argument("--encoder_name", type=str, default='resnet50',
                         help='Name of the classification model that will be used as an encoder (a.k.a backbone)')
@@ -97,66 +90,70 @@ def _get_argparser():
                         help='Final upsampling factor. Default is 4 to preserve input-output spatial shape identity')
     parser.add_argument("--aux_params", type=dict, default=None,
                         help='Dictionary with parameters of the auxiliary output (classification head)')
+    # ViT options
+    parser.add_argument("--vit_image_size", type=int, default=512,
+                        help='ViT image size')
+    parser.add_argument("--vit_patch_size", type=int, default=32,
+                        help='ViT patch size')
+    parser.add_argument("--vit_num_classes", type=int, default=256,
+                        help='ViT num classes')
+    parser.add_argument("--vit_dim", type=int, default=1024,
+                        help='ViT dim')
+    parser.add_argument("--vit_depth", type=int, default=6,
+                        help='ViT depth')
+    parser.add_argument("--vit_heads", type=int, default=16,
+                        help='ViT heads')
+    parser.add_argument("--vit_mlp_dim", type=int, default=2048,
+                        help='ViT mlp dim')
+    parser.add_argument("--vit_dropout", type=float, default=0.1,
+                        help='ViT dropout')
+    parser.add_argument("--vit_emb_dropout", type=float, default=0.1,
+                        help='ViT emb dropout')    
 
     # Dataset options
     available_datasets = sorted( name for name in datasets.getdata.__dict__ if  callable(datasets.getdata.__dict__[name]) )
     parser.add_argument("--dataset", type=str, default="cpn", choices=available_datasets,
-                        help='primary dataset (default: cpn)')                        
+                        help='primary dataset (default: cpn)')                  
     parser.add_argument("--dataset_ver", type=str, default="splits/v5/3",
                         help="version of primary dataset (default: splits/v5/3)")                   
     parser.add_argument("--num_workers", type=int, default=8,
                         help="number of workers (default: 8)")
     parser.add_argument("--tvs", type=int, default=20,
-                        help="The number of blocks where train set to be split (default: 20)")
-    parser.add_argument("--pseudo_lbl_ratio", type=float, default=0.5,
-                        help="ratio of pseudo label (default: 0.5)")
+                        help="number of blocks in train set to be splited (default: 20)")
 
     # Transformation & Augmentation options
-    parser.add_argument("--is_resize", action='store_false',
-                        help="resize data (default: True)")
-    parser.add_argument("--is_resize_val", action='store_false',
-                        help="resize validate data (default: True)")
-    parser.add_argument("--is_resize_test", action='store_false',
-                        help="resize test data (default: True)")
-    parser.add_argument("--resize", default=(496, 468))
-    parser.add_argument("--resize_val", default=(496, 468))
-    parser.add_argument("--resize_test", default=(496, 468))
+    parser.add_argument("--is_resize", action='store_true',
+                        help="resize data (default: false)")
+    parser.add_argument("--is_resize_val", action='store_true',
+                        help="resize validate data (default: false)")
+    parser.add_argument("--is_resize_test", action='store_true',
+                        help="resize test data (default: false)")
+    parser.add_argument("--resize", default=(256, 256))
+    parser.add_argument("--resize_val", default=(256, 256))
+    parser.add_argument("--resize_test", default=(256, 256))
     
     # Scale
-    parser.add_argument("--is_scale", action='store_false',
-                        help="scale data (default: True)")
-    parser.add_argument("--is_scale_val", action='store_false',
-                        help="scale data (default: True)")
-    parser.add_argument("--is_scale_test", action='store_false',
-                        help="scale data (default: True)")
+    parser.add_argument("--is_scale", action='store_true',
+                        help="scale data (default: false)")
+    parser.add_argument("--is_scale_val", action='store_true',
+                        help="scale data (default: false)")
+    parser.add_argument("--is_scale_test", action='store_true',
+                        help="scale data (default: false)")
     parser.add_argument("--scale_factor", type=float, default=5e-1)
     parser.add_argument("--scale_factor_val", type=float, default=5e-1)
     parser.add_argument("--scale_factor_test", type=float, default=5e-1)
 
     # Crop
-    parser.add_argument("--is_crop", action='store_false',
-                        help="crop data (default: True)")
-    parser.add_argument("--is_crop_val", action='store_false',
-                        help="crop data (default: True)")
-    parser.add_argument("--is_crop_test", action='store_false',
-                        help="crop data (default: True)")
-    parser.add_argument("--crop_size", default=(512, 448))    
-    parser.add_argument("--crop_size_val", default=(512, 448))
-    parser.add_argument("--crop_size_test", default=(512, 448))
+    parser.add_argument("--is_crop", action='store_true',
+                        help="crop data (default: false)")
+    parser.add_argument("--is_crop_val", action='store_true',
+                        help="crop data (default: false)")
+    parser.add_argument("--is_crop_test", action='store_true',
+                        help="crop data (default: false)")
+    parser.add_argument("--crop_size", default=(256, 256))
+    parser.add_argument("--crop_size_val", default=(256, 256))
+    parser.add_argument("--crop_size_test", default=(256, 256))
     
-    # Gaussian crop
-    parser.add_argument("--is_gaussian_crop", action='store_true')
-    parser.add_argument("--gaussian_crop_H", default=(0.0 ,0.1),
-                        help='gaussian base random crop H (mean, std)')
-    parser.add_argument("--gaussian_crop_W", default=(0.0 ,0.1),
-                        help='gaussian base random crop W (mean, std)')
-    parser.add_argument("--gaussian_crop_block_size", type=int, default=5)
-    
-    # Other options / Gaussian noise channel
-    parser.add_argument("--c_std", type=float, default=0.0,
-                        help="train sigma in gaussian noise channel (default: 0)")
-    parser.add_argument("--c_mu", type=float, default=0.0,
-                        help="train mean in gaussian noise channel (default: 0)")
     # Gaussian perturbation
     parser.add_argument("--std", type=float, default=0.0,
                         help="train sigma in gaussian perturbation (default: 0)")
@@ -170,6 +167,7 @@ def _get_argparser():
                         help="test sigma in gaussian perturbation (default: 0)")
     parser.add_argument("--mu_test", type=float, default=0.0,
                         help="test mean in gaussian perturbation (default: 0)") 
+    
     # Train options
     parser.add_argument("--random_seed", type=int, default=1,
                         help="random seed (default: 1)")
@@ -188,23 +186,23 @@ def _get_argparser():
     parser.add_argument("--optim", type=str, default='SGD',
                         help="optimizer (default: SGD)")
     parser.add_argument("--loss_type", type=str, default='entropydice_loss',
-                        help="criterion (default: kd loss alpha=0 for ce+dl)")
+                        help="criterion (default: ce+dl)")
+    parser.add_argument("--vit_loss_type", type=str, default='crossentropy_loss',
+                        help="vit criterion (default: cross entropy)")
     parser.add_argument("--batch_size", type=int, default=32,
                         help='batch size (default: 32)')
+    parser.add_argument("--vit_batch_size", type=int, default=32,
+                        help='vit batch size (default: 32)')
     parser.add_argument("--exp_itr", type=int, default=20,
                         help='repeat N-identical experiments (default: 20)')
-
-    # Knowledge distillation
-    parser.add_argument("--alpha", type=float, default=0,
-                        help="alpha for KD loss (default: 0)")
-    parser.add_argument("--T", type=float, default=3,
-                        help="temperature in KD loss (default: 3)")
 
     # Validate options
     parser.add_argument("--val_interval", type=int, default=1,
                         help="epoch interval for eval (default: 1)")
     parser.add_argument("--val_batch_size", type=int, default=4,
                         help='batch size for validate (default: 4)') 
+    parser.add_argument("--val_vit_batch_size", type=int, default=4,
+                        help='batch size for vit validate (default: 4)') 
 
     # Early stop options
     parser.add_argument("--patience", type=int, default=100,
@@ -217,6 +215,8 @@ def _get_argparser():
                         help="epoch interval for test (default: 1)")
     parser.add_argument("--test_batch_size", type=int, default=4,
                         help='batch size for test (default: 4)')
+    parser.add_argument("--test_vit_batch_size", type=int, default=4,
+                        help='vit batch size for test (default: 4)')
     parser.add_argument("--save_test_results", action='store_false',
                         help='save test results to \"./test\" (default: True)')
     parser.add_argument("--test_results_dir", type=str, default='/',
@@ -289,14 +289,15 @@ if __name__ == "__main__":
     jsummary = {}
     for key, val in vars(opts).items():
         jsummary[key] = val
-    utils.save_dict_to_json(d=jsummary, json_path='/data1/sdi/CPNKDv5/utils/sample/opts_sample.json')
 
-    pram = utils.Params('/data1/sdi/CPNKDv4/utils/sample/opts_sample.json')
+    utils.save_dict_to_json(d=jsummary, json_path='/home/dongik/src/json out/opts.json')
 
-    print(type(pram.separable_conv)) # bool
-    print(type(pram.num_classes)) # int
+    pram = utils.Params('/home/dongik/src/json out/opts.json')
+
+    print(type(pram.decoder_channels)) # bool
+    print(type(pram.classes)) # int
     print(type(pram.weight_decay)) # float
     print(type(pram.best_ckpt)) # str
 
-    pram.update(json_path='/data1/sdi/CPNKDv5/utils/sample/opts_sample.json')
-    utils.save_dict_to_json(pram.__dict__, '/data1/sdi/CPNKDv5/utils/sample/out.json')
+    pram.update(json_path='/home/dongik/src/json out/opts.json')
+    utils.save_dict_to_json(pram.__dict__, '/home/dongik/src/json out/out.json')

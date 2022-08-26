@@ -136,7 +136,7 @@ if __name__ == "__main__":
     block = ( 512 // patch_size[0], 512 // patch_size[1] )
     total = np.zeros( (block[0], block[1]) )
     for ist in image_set_type:
-        dst = CPNvit(root='/data1/sdi/datasets', datatype='CPN_vit', image_set=ist,
+        dst = CPNvit(root='/home/dongik/datasets', datatype='CPN_vit', image_set=ist,
                     transform=transform, is_rgb=True, dver='splits/v5/3', image_patch_size=patch_size)
         loader = DataLoader(dst, batch_size=16,
                                 shuffle=True, num_workers=2, drop_last=True)

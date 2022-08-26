@@ -311,6 +311,3 @@ def experiments(opts, run_id) -> dict:
                 'OS' : str(opts.encoder_output_stride), 'Epoch' : str(best_epoch),
                 'F1 [0]' : best_score['Class F1'][0], 'F1 [1]' : best_score['Class F1'][1]
             }
-
-
-        
