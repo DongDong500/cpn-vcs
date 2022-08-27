@@ -1,3 +1,1 @@
-from .peroneal import Peroneal
-
-from .getdata import *
+from .loader import *

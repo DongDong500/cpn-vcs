@@ -156,6 +156,9 @@ class CrossEntropyLoss(_WeightedLoss):
         self.ignore_index = ignore_index
         self.label_smoothing = label_smoothing
 
+    def update_weight(self, weight: Optional[Tensor] = None):
+        self.weight = weight
+        
     def forward(self, input: Tensor, target: Tensor) -> Tensor:
         return F.cross_entropy(input, target, weight=self.weight,
                                ignore_index=self.ignore_index, reduction=self.reduction,

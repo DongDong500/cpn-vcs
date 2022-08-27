@@ -37,43 +37,14 @@ class Peroneal(data.Dataset):
 
         return img, target
 
-    def mktv(self, tvs):
-        """
-        Args:
-            tvs (int): split ratio
-        """
-        if not os.path.exists( os.path.join(self.root, self.datatype, self.dver, '_train.txt') ):
-            raise Exception( '_train.txt not found.' /
-                                os.path.join(self.root, self.datatype, self.dver, '_train.txt') )
-        
-        with open(os.path.join(self.root, self.datatype, self.dver, '_train.txt'), "r") as f:
-            file_names = [x.strip() for x in f.readlines()]
-
-        n = math.floor(len(file_names) / tvs)
-
-        val = sample(file_names, n)
-        train = list(set(file_names) - set(val))
-
-        with open(os.path.join(self.root, self.datatype, self.dver, 'train.txt'), 'w') as f:
-            for w in train:
-                f.write(f'{w}\n')
-        with open(os.path.join(self.root, self.datatype, self.dver, 'val.txt'), 'w') as f:
-            for w in val:
-                f.write(f'{w}\n')
-
     def __init__(self, root, datatype='CPN', dver='splits', image_set='train', 
-                    transform=None, in_channels=3, tvs=20, **kwargs):
+                    transform=None, in_channels=3, **kwargs):
         self.root = root
         self.datatype = datatype
         self.dver = dver
         self.image_set = image_set
         self.transform = transform
         self.in_channels = in_channels
-
-        if tvs < 2:
-            raise Exception("tvs must be larger than 1")
-        if image_set == 'train':
-            self.mktv(tvs=tvs)
 
         image_dir = os.path.join(self.root, self.datatype, 'Images')
         mask_dir = os.path.join(self.root, self.datatype, 'Masks')
@@ -134,9 +105,12 @@ if __name__ == "__main__":
                     transform=transform, in_channels=3, dver='splits/v5/3', tvs=20)
         loader = DataLoader(dst, batch_size=16,
                                 shuffle=True, num_workers=2, drop_last=True)
-        print(f'len [{ist}]: {len(dst)}')
+        print(f'[{ist}] {len(dst)} samples')
 
-        for i, (ims, lbls) in tqdm(enumerate(loader)):
+        for i, (ims, lbls) in enumerate(loader):
+            if i < 1:
+                print(f'ims shape {ims.shape}')
+                print(f'lbls shape {lbls.shape}')
             pass
         
         print('Clear !!!')

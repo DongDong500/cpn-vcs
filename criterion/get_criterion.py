@@ -1,33 +1,18 @@
-try: 
-    from entropydice import EntropyDiceLoss
-    from focal import FocalLoss
-    from dice import DiceLoss
-    from crossentropy import CrossEntropyLoss
-    from kdloss import KDLoss
-    from gploss import GPLoss
-except:
-    from .entropydice import EntropyDiceLoss
-    from .focal import FocalLoss
-    from .dice import DiceLoss
-    from .crossentropy import CrossEntropyLoss
-    from .kdloss import KDLoss
-    from .gploss import GPLoss
+from entropydice import EntropyDiceLoss
+from dice import DiceLoss
+from crossentropy import CrossEntropyLoss
 
-def entropydice_loss(**kwargs):
+def entropydice(**kwargs):
 
     return EntropyDiceLoss()
 
-def dice_loss(**kwargs):
+def dice(**kwargs):
 
     return DiceLoss()
 
-def kd_loss(opts, **kwargs):
-    
-    return KDLoss(alpha=opts.alpha, temperature=opts.T)
+def crossentropy(**kwargs):
 
-def gp_loss(**kwargs):
-    
-    return GPLoss()
+    return CrossEntropyLoss()
 
 
 if __name__ == "__main__":
@@ -35,7 +20,7 @@ if __name__ == "__main__":
     import torch
     import torch.nn as nn
     
-    loss = dice_loss()
+    loss = dice()
 
     m = nn.Softmax()
 

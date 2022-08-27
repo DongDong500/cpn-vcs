@@ -1,4 +1,5 @@
 import segmentation_models_pytorch as SMP
+from vit_pytorch import ViT
 
 def deeplabv3plus_resnet50(encoder_name, encoder_depth, encoder_weights, encoder_output_stride, 
                             decoder_channels, decoder_atrous_rates, in_channels, classes, 
@@ -44,6 +45,10 @@ def deeplabv3plus_resnet101(encoder_name, encoder_depth, encoder_weights, encode
     return SMP.DeepLabV3Plus(encoder_name='resnet101', encoder_depth=encoder_depth, encoder_weights=encoder_weights, encoder_output_stride=encoder_output_stride, 
                                 decoder_channels=decoder_channels, decoder_atrous_rates=decoder_atrous_rates, in_channels=in_channels, classes=classes, 
                                 activation=activation, upsampling=upsampling, aux_params=aux_params)
+
+def vit(**kwargs):
+
+    return ViT(**kwargs)
 
 
 if __name__ == "__main__":

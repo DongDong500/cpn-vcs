@@ -4,7 +4,7 @@ import argparse
 from datetime import datetime
 
 import network
-import datasets
+import dataloader
 import utils
 
 HOSTNAME = {
@@ -63,10 +63,14 @@ def _get_argparser():
                         help='semantic-segmentation model name (default: deeplabv3plus_resnet50)')
     parser.add_argument("--model_params", type=str, default='/',
                         help="pretrained semantic-segmentation model params (default: '/')")
+    parser.add_argument("--model_pretrain", action='store_true',
+                        help="restore param from checkpoint (defaults: false)")
     parser.add_argument("--vit_model", type=str, default='vit', choices=available_models,
                         help='vit model name (default: vit)')
     parser.add_argument("--vit_model_params", type=str, default='/',
                         help="pretrained vit model params (default: '/')")
+    parser.add_argument("--vit_model_pretrain", action='store_true',
+                        help="restore param from checkpoint (defaults: false)")
     # DeeplabV3+ options
     parser.add_argument("--encoder_name", type=str, default='resnet50',
                         help='Name of the classification model that will be used as an encoder (a.k.a backbone)')
@@ -111,9 +115,9 @@ def _get_argparser():
                         help='ViT emb dropout')    
 
     # Dataset options
-    available_datasets = sorted( name for name in datasets.getdata.__dict__ if  callable(datasets.getdata.__dict__[name]) )
-    parser.add_argument("--dataset", type=str, default="cpn", choices=available_datasets,
-                        help='primary dataset (default: cpn)')                  
+    available_datasets = sorted( name for name in dataloader.loader.__dict__ if  callable(dataloader.loader.__dict__[name]) )
+    parser.add_argument("--dataset", type=str, default="cpn_vit", choices=available_datasets,
+                        help='primary dataset (default: cpn_vit)')                  
     parser.add_argument("--dataset_ver", type=str, default="splits/v5/3",
                         help="version of primary dataset (default: splits/v5/3)")                   
     parser.add_argument("--num_workers", type=int, default=8,
@@ -185,10 +189,10 @@ def _get_argparser():
                         help='momentum (default: 0.9)')
     parser.add_argument("--optim", type=str, default='SGD',
                         help="optimizer (default: SGD)")
-    parser.add_argument("--loss_type", type=str, default='entropydice_loss',
+    parser.add_argument("--loss_type", type=str, default='entropydice',
                         help="criterion (default: ce+dl)")
-    parser.add_argument("--vit_loss_type", type=str, default='crossentropy_loss',
-                        help="vit criterion (default: cross entropy)")
+    parser.add_argument("--vit_loss_type", type=str, default='crossentropy',
+                        help="vit criterion (default: CrossEntropy)")
     parser.add_argument("--batch_size", type=int, default=32,
                         help='batch size (default: 32)')
     parser.add_argument("--vit_batch_size", type=int, default=32,
