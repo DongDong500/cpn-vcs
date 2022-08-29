@@ -1,5 +1,6 @@
 import os
 import random
+import numbers
 import numpy as np
 import torch
 import torch.nn as nn
@@ -35,17 +36,20 @@ def get_dataset(opts):
     train_dst = dataloader.loader.__dict__[opts.dataset]( 
         pth = os.path.join(opts.data_root, opts.dataset, opts.dataset_ver), tvs = opts.tvs, mkset = True,
         root=opts.data_root, datatype=opts.dataset, dver=opts.dataset_ver, 
-        image_set='train', transform=train_transform, in_channels=opts.in_channels )
+        image_set='train', transform=train_transform, in_channels=opts.in_channels,
+        image_patch_size=(opts.vit_patch_size, opts.vit_patch_size))
 
     val_dst = dataloader.loader.__dict__[opts.dataset]( 
         pth = os.path.join(opts.data_root, opts.dataset, opts.dataset_ver), tvs = opts.tvs, mkset = False,
         root=opts.data_root, datatype=opts.dataset, dver=opts.dataset_ver, 
-        image_set='val', transform=train_transform, in_channels=opts.in_channels )
+        image_set='val', transform=train_transform, in_channels=opts.in_channels,
+        image_patch_size=(opts.vit_patch_size, opts.vit_patch_size) )
 
     test_dst = dataloader.loader.__dict__[opts.dataset]( 
         pth = os.path.join(opts.data_root, opts.dataset, opts.dataset_ver), tvs = opts.tvs, mkset = False,
         root=opts.data_root, datatype=opts.dataset, dver=opts.dataset_ver, 
-        image_set='test', transform=train_transform, in_channels=opts.in_channels)
+        image_set='test', transform=train_transform, in_channels=opts.in_channels,
+        image_patch_size=(opts.vit_patch_size, opts.vit_patch_size) )
 
     print("Dataset - %s\n\tTrain\t%d\n\tVal\t%d\n\tTest\t%d" % 
             (opts.dataset_ver + '/' + opts.dataset, len(train_dst), len(val_dst), len(test_dst)))
@@ -126,37 +130,144 @@ def set_optim(opts, model_name, model):
 
     return optimizer, scheduler
 
-def train(devices, model, loader, loss_type, optimizer, scheduler, metrics, **kwargs):
+def crop(ims, bboxs, masks, patch_size, crop_size=256):
+    """
+    Args:
+        ims (numpy.ndarray) size : (B x C x H x W)
+        lbls (numpy.ndarray) lbls[0] : size (B), lbls[1] : size (B x C x H x W)
+        cls (numpy.ndarray) size : (B)
+    """
+    if isinstance(crop_size, numbers.Number):
+        crop_size = (int(crop_size), int(crop_size))
+    else:
+        crop_size = crop_size
 
-    model.train()
+    def cmap(N=3, preds=False):
+        color_map = np.zeros((N, 3), dtype='uint8')
+        color_map[0] = np.array([255, 255, 255])
+        color_map[1] = np.array([255, 0, 0]) if preds else np.array([0, 0, 255])
+        color_map[2] = np.array([50, 200, 100])
+
+        return color_map
+    
+    denorm = utils.Denormalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    
+    cmp = cmap(N=3, preds=False)
+
+    from PIL import Image
+
+    block = 512 / patch_size
+    
+    q = bboxs // block
+    r = bboxs % block
+    pnt = (( (q * patch_size + (q+1) * patch_size)/2 ).astype(int), ( (r * patch_size + (r+1) * patch_size)/2 ).astype(int))
+    print(pnt)
+    #masks = masks.astype(np.uint8) * 255
+
+    for i in range(masks.shape[0]):
+        tar1 = (denorm(ims[i]) * 255).transpose(1, 2, 0).astype(np.uint8)
+        print(masks[i, ...])
+        ma = cmp[masks[i, ...]]
+
+        # Height
+        if pnt[0][i] >= crop_size[0]/2 and (512 - pnt[0][i]) >= crop_size[0]/2:
+            lt = (int(pnt[0][i] - crop_size[0]/2), 0)
+            rb = (int(pnt[0][i] + crop_size[0]/2), 0)
+        elif pnt[0][i] < crop_size[0]/2 and (512 - pnt[0][i]) >= crop_size[0]/2:
+            lt = (0, 0)
+            rb = (crop_size[0], 0)
+        elif pnt[0][i] >= crop_size[0]/2 and (512 - pnt[0][i]) < crop_size[0]/2:
+            lt = (512 - crop_size[0], 0)
+            rb = (512, 0)
+        lt = list(lt)
+        rb = list(rb)
+        # Width
+        if pnt[1][i] >= crop_size[1]/2 and (512 - pnt[1][i]) >= crop_size[1]/2:
+            lt[1] = int(pnt[1][i] - crop_size[1]/2)
+            rb[1] = int(pnt[1][i] + crop_size[1]/2)
+        elif pnt[1][i] < crop_size[1]/2 and (512 - pnt[1][i]) >= crop_size[1]/2:
+            lt[1] = 0
+            rb[1] = crop_size[1]
+        elif pnt[1][i] >= crop_size[1]/2 and (512 - pnt[1][i]) < crop_size[1]/2:
+            lt[1] = 512 - crop_size[1]
+            rb[1] = 512
+
+        Image.fromarray(tar1, 'RGB').save('/home/dongik/src/out.png')
+        masks[i, ...][pnt[0][i]-3:pnt[0][i]+3, pnt[1][i]-int(patch_size/2):pnt[1][i]+int(patch_size/2)] = 2
+        masks[i, ...][pnt[0][i]-int(patch_size/2):pnt[0][i]+int(patch_size/2), pnt[1][i]-3:pnt[1][i]+3] = 2
+        
+        masks[i, ...][lt[0]:rb[0], lt[1]:lt[1]+3] = 2
+        masks[i, ...][lt[0]:rb[0], rb[1]-3:rb[1]] = 2
+        masks[i, ...][lt[0]:lt[0]+3, lt[1]:rb[1]] = 2
+        masks[i, ...][rb[0]-3:rb[0], lt[1]:rb[1]] = 2
+        
+        maSpot = (tar1 *0.5 + cmp[masks[i, ...]] * 0.5).astype(np.uint8)
+
+        print(maSpot.shape)
+        
+        Image.fromarray(maSpot, 'RGB').save('/home/dongik/src/sample.png')
+
+    return ims, bboxs, masks
+
+
+def train(devices, Snet, Vnet, loader, Sloss, Vloss, 
+            Soptimizer, Sscheduler, Voptimizer, Vscheduler, 
+            metrics, **kwargs):
+
+    Snet.train()
+    Vnet.train()
+
     metrics.reset()
     running_loss = 0.0
-    lossFun = criterion.get_criterion.__dict__[loss_type](**kwargs)
+
+    Sloss = criterion.get_criterion.__dict__[Sloss](**kwargs)
+    Vloss = criterion.get_criterion.__dict__[Vloss](**kwargs)
 
     for i, (ims, lbls) in enumerate(loader):
         ims = ims.to(devices)
-        lbls = lbls.to(devices)
+        bbox = lbls[0].to(devices)
+        masks = lbls[1].to(devices)
 
-        output = model(ims)
-        probs = nn.Softmax(dim=1)(output)
-        preds = torch.max(probs, 1)[1].detach().cpu().numpy()
+        Voutput = Vnet(ims)
+        Vprobs = nn.Softmax(dim=1)(Voutput)
+        cls = torch.max(Vprobs, 1)[1].detach().cpu().numpy()
 
-        if loss_type == 'entropydice':
-            pass
-        elif loss_type == 'crossentropy':
+
+
+        Soutput = Snet()
+        Sprobs = nn.Softmax(dim=1)(Soutput)
+        Sperds = torch.max(Sprobs, 1)[1].detach().cpu().numpy()
+
+        if Vloss == 'crossentropy':
             pass
         else:
-            raise Exception (f'{loss_type} is not option')
+            raise Exception (f'{Vloss} is not option')
 
-        optimizer.zero_grad()
-        loss = lossFun(output, lbls)
-        loss.backward()
-        optimizer.step()
-        metrics.update(lbls.detach().cpu().numpy(), preds)
-        running_loss += loss.item() * ims.size(0)
+        if Sloss == 'entropydice':
+            pass
+        else:
+            raise Exception (f'{Sloss} is not option')
 
-    scheduler.step()
+        Voptimizer.zero_grad()
+        Soptimizer.zero_grad()
+
+        Vloss = Vloss(Voutput, lbls[0])
+        Vloss.backward()
+
+        Sloss = Sloss(Soutput, )
+        Sloss.backward()
+
+        Voptimizer.step()
+        Soptimizer.step()
+        
+        metrics.update(lbls[1].detach().cpu().numpy(), )
+        running_loss += Sloss.item() * ims.size(0)
+
+    Sscheduler.step()
+    Vscheduler.step()
+
     epoch_loss = running_loss / len(loader.dataset)
+    
     score = metrics.get_results()
 
     return score, epoch_loss
@@ -230,5 +341,5 @@ def experiments(opts, run_id) -> dict:
     ##################################################
     for epoch in range(resume_epoch, opts.total_itrs):
         score, epoch_loss = train(devices=devices, model=segnet, loader=train_loader, 
-                                loss_type=opts.loss_type, optimizer=Soptim, scheduler=Ssche, metrics= )
+                                loss_type=opts.loss_type, optimizer=Soptim, scheduler=Ssche, metrics=... )
         

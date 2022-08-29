@@ -79,18 +79,18 @@ class PeronealViT(data.Dataset):
             file_names = [x.strip() for x in f.readlines()]
 
         if self.image_set == 'train' or self.image_set == 'val':
-            self.images = [os.path.join(image_dir, x + ".jpg") for x in file_names] + \
-                            [os.path.join(image_dir, x + "_1.jpg") for x in file_names] + \
-                            [os.path.join(image_dir, x + "_2.jpg") for x in file_names] + \
-                            [os.path.join(image_dir, x + "_3.jpg") for x in file_names]
+            self.images = [os.path.join(image_dir, x + ".bmp") for x in file_names] + \
+                            [os.path.join(image_dir, x + "_1.bmp") for x in file_names] + \
+                            [os.path.join(image_dir, x + "_2.bmp") for x in file_names] + \
+                            [os.path.join(image_dir, x + "_3.bmp") for x in file_names]
 
-            self.masks = [os.path.join(mask_dir, x + ".jpg") for x in file_names] + \
-                            [os.path.join(mask_dir, x + "_1.jpg") for x in file_names] + \
-                            [os.path.join(mask_dir, x + "_2.jpg") for x in file_names] + \
-                            [os.path.join(mask_dir, x + "_3.jpg") for x in file_names]
+            self.masks = [os.path.join(mask_dir, x + ".bmp") for x in file_names] + \
+                            [os.path.join(mask_dir, x + "_1.bmp") for x in file_names] + \
+                            [os.path.join(mask_dir, x + "_2.bmp") for x in file_names] + \
+                            [os.path.join(mask_dir, x + "_3.bmp") for x in file_names]
         else:
-            self.images = [os.path.join(image_dir, x + ".jpg") for x in file_names]
-            self.masks = [os.path.join(mask_dir, x + ".jpg") for x in file_names]
+            self.images = [os.path.join(image_dir, x + ".bmp") for x in file_names]
+            self.masks = [os.path.join(mask_dir, x + ".bmp") for x in file_names]
 
         assert (len(self.images) == len(self.masks))
 

@@ -1,6 +1,6 @@
-from entropydice import EntropyDiceLoss
-from dice import DiceLoss
-from crossentropy import CrossEntropyLoss
+from .dice import DiceLoss
+from .entropydice import EntropyDiceLoss
+from .crossentropy import CrossEntropyLoss
 
 def entropydice(**kwargs):
 

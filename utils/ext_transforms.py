@@ -297,9 +297,11 @@ class ExtToTensor(object):
             Tensor: Converted image and label
         """
         if self.is_binary:
-            lbl = (np.array( lbl, dtype=self.target_type) / 255) + 1.0 - 1/255
-            lbl = lbl.astype('long')
-            return F.to_tensor(pic), torch.from_numpy( lbl )
+            tar = np.zeros((lbl.size[1], lbl.size[0]), dtype=self.target_type)
+            tar[np.where(np.array(lbl) > 0)] = 1
+            #lbl = (np.array( lbl, dtype=self.target_type) / 255) + 1.0 - 1/255
+            #lbl = lbl.astype('long')
+            return F.to_tensor(pic), torch.from_numpy( tar )
         if self.normalize:
             return F.to_tensor(pic), torch.from_numpy( np.array( lbl, dtype=self.target_type) )
         else:

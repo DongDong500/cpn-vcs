@@ -97,7 +97,7 @@ def _get_argparser():
     # ViT options
     parser.add_argument("--vit_image_size", type=int, default=512,
                         help='ViT image size')
-    parser.add_argument("--vit_patch_size", type=int, default=32,
+    parser.add_argument("--vit_patch_size", type=int, default=64,
                         help='ViT patch size')
     parser.add_argument("--vit_num_classes", type=int, default=256,
                         help='ViT num classes')

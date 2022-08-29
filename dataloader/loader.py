@@ -2,8 +2,8 @@ import os
 import math
 from random import sample
 
-import peroneal
-import peroneal_vit
+from .peroneal import Peroneal
+from .peroneal_vit import PeronealViT
 
 def mktv(pth, tvs):
     """
@@ -45,7 +45,7 @@ def cpn(pth, tvs, mkset = False, **kwargs):
     elif tvs >= 2 and mkset:
         mktv(pth, tvs)
 
-    return peroneal.Peroneal(**kwargs)
+    return Peroneal(**kwargs)
 
 def cpn_vit(pth, tvs, mkset = False, **kwargs):
     
@@ -58,7 +58,7 @@ def cpn_vit(pth, tvs, mkset = False, **kwargs):
     elif tvs >= 2 and mkset:
         mktv(pth, tvs)
 
-    return peroneal_vit.PeronealViT(**kwargs)
+    return PeronealViT(**kwargs)
 
 
 
