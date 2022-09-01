@@ -54,11 +54,11 @@ class DiceStopping:
         '''Dice score 가 감소하면 모델을 저장한다.'''
         if self.verbose:
             print(f'Dice score increased ({self.best_score:.4f} --> {dice:.4f})')
-            print(f"save path: {os.path.join(self.path, 'checkpoint.pt')}")
+            print(f"save path: {os.path.join(self.path, 'dicecheckpoint.pt')}")
 
         torch.save({
             'model_state' : model.state_dict(),
             'optimizer_state' : optim.state_dict(),
             'scheduler_state' : scheduler.state_dict(),
             'cur_itrs' : cur_itrs,
-        }, os.path.join(self.path, 'checkpoint.pt'))
+        }, os.path.join(self.path, 'dicecheckpoint.pt'))

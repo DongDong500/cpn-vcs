@@ -12,10 +12,10 @@ if __name__ == "__main__":
     
     devices = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print("Device: %s: %s" % (devices, opts.gpus))
-    opts.dataset = 'cpn_vit'
+    opts.dataset = 'cpn'
     dst, _, _ = get_dataset(opts)
 
-    dst_loader = DataLoader(dst, batch_size=opts.batch_size, 
+    dst_loader = DataLoader(dst, batch_size=64, 
                                 num_workers=opts.num_workers, shuffle=True, drop_last=True)
 
     for i, (ims, lbls) in enumerate(dst_loader):
@@ -27,6 +27,7 @@ if __name__ == "__main__":
         print(bboxs.shape)
         print(masks.shape)
 
-        A, B, C = crop(ims.detach().cpu().numpy(), bboxs.detach().cpu().numpy(), masks.detach().cpu().numpy(), opts.vit_patch_size)
-        
+        img, ma  = crop(ims.detach().cpu().numpy(), bboxs.detach().cpu().numpy(), masks.detach().cpu().numpy(), opts.vit_patch_size)
+
+
         break

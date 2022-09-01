@@ -8,16 +8,20 @@ import dataloader
 import utils
 
 HOSTNAME = {
-    "server6" : 6
+    "server6" : 6,
+    "server5" : 5
 }
 LOGIN = {
-    "server6" : "/home/dongik/src/login.json"
+    "server6" : "/home/dongik/src/login.json",
+    "server5" : "/home/dongik/src/login.json"
 }
 DEFAULT_PREFIX = {
-    "server6" : "/DATA/dongik"
+    "server6" : "/DATA/dongik",
+    "server5" : "/data1/sdi"
 }
 DATA_DIR = {
-    "server6" : "/home/dongik/datasets"
+    "server6" : "/home/dongik/datasets",
+    "server5" : "/home/dongik/datasets"
 }
 
 
@@ -99,7 +103,7 @@ def _get_argparser():
                         help='ViT image size')
     parser.add_argument("--vit_patch_size", type=int, default=64,
                         help='ViT patch size')
-    parser.add_argument("--vit_num_classes", type=int, default=256,
+    parser.add_argument("--vit_num_classes", type=int, default=64,
                         help='ViT num classes')
     parser.add_argument("--vit_dim", type=int, default=1024,
                         help='ViT dim')
@@ -294,14 +298,14 @@ if __name__ == "__main__":
     for key, val in vars(opts).items():
         jsummary[key] = val
 
-    utils.save_dict_to_json(d=jsummary, json_path='/home/dongik/src/json out/opts.json')
+    utils.save_dict_to_json(d=jsummary, json_path='/home/dongik/src/json-output/opts.json')
 
-    pram = utils.Params('/home/dongik/src/json out/opts.json')
+    pram = utils.Params('/home/dongik/src/json-output/opts.json')
 
     print(type(pram.decoder_channels)) # bool
     print(type(pram.classes)) # int
     print(type(pram.weight_decay)) # float
     print(type(pram.best_ckpt)) # str
 
-    pram.update(json_path='/home/dongik/src/json out/opts.json')
-    utils.save_dict_to_json(pram.__dict__, '/home/dongik/src/json out/out.json')
+    pram.update(json_path='/home/dongik/src/json-output/opts.json')
+    utils.save_dict_to_json(pram.__dict__, '/home/dongik/src/json-output/out.json')

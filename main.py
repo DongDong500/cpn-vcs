@@ -3,7 +3,7 @@ import numpy as np
 import traceback
 from datetime import datetime
 
-from train_mono import experiments as mono
+from train_vcs import experiments as mono
 from utils import MailSend
 import utils
 
@@ -92,36 +92,15 @@ def exp(opts):
 
 
 if __name__ == '__main__':
-    from args_mono import get_argparser, save_argparser
+    from args_vcs import get_argparser, save_argparser
 
     total_time = datetime.now()
-    ''' gaussian prior random crop size (360, 360) from (640, 640) 
-        test with 1/2 scaled (360, 360) 
-    '''
     try:
         is_error = False
-        #size=(256, 256), normal_h=(21.08, 8.13), normal_w=(44.22, 12.01), block_size=5
-        short_memo = ['12 New version of pmn:median+cpn in batch train (green dots on) (512, 512) base study n=20']
+        short_memo = ['vit segmentation pioneer study with pred anchor']
         for i in range(len(short_memo)):
             opts = get_argparser()
             opts.short_memo = short_memo[i]
-
-            opts.dataset = 'pmn'
-            
-            opts.is_gaussian_crop = False
-
-            opts.is_resize = False
-            opts.is_resize_val = False
-            opts.is_resize_test = False
-
-            opts.is_crop = False
-            opts.is_crop_val = False
-            opts.is_crop_test = False
-
-            opts.scale_factor = 0.5
-            opts.scale_factor_val = 0.5
-            opts.scale_factor_test = 0.5
-
             exp(opts)
         
     except KeyboardInterrupt:
