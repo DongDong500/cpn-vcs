@@ -129,38 +129,8 @@ def _get_argparser():
     parser.add_argument("--tvs", type=int, default=20,
                         help="number of blocks in train set to be splited (default: 20)")
 
-    # Transformation & Augmentation options
-    parser.add_argument("--is_resize", action='store_true',
-                        help="resize data (default: false)")
-    parser.add_argument("--is_resize_val", action='store_true',
-                        help="resize validate data (default: false)")
-    parser.add_argument("--is_resize_test", action='store_true',
-                        help="resize test data (default: false)")
-    parser.add_argument("--resize", default=(256, 256))
-    parser.add_argument("--resize_val", default=(256, 256))
-    parser.add_argument("--resize_test", default=(256, 256))
-    
-    # Scale
-    parser.add_argument("--is_scale", action='store_true',
-                        help="scale data (default: false)")
-    parser.add_argument("--is_scale_val", action='store_true',
-                        help="scale data (default: false)")
-    parser.add_argument("--is_scale_test", action='store_true',
-                        help="scale data (default: false)")
-    parser.add_argument("--scale_factor", type=float, default=5e-1)
-    parser.add_argument("--scale_factor_val", type=float, default=5e-1)
-    parser.add_argument("--scale_factor_test", type=float, default=5e-1)
-
     # Crop
-    parser.add_argument("--is_crop", action='store_true',
-                        help="crop data (default: false)")
-    parser.add_argument("--is_crop_val", action='store_true',
-                        help="crop data (default: false)")
-    parser.add_argument("--is_crop_test", action='store_true',
-                        help="crop data (default: false)")
-    parser.add_argument("--crop_size", default=(256, 256))
-    parser.add_argument("--crop_size_val", default=(256, 256))
-    parser.add_argument("--crop_size_test", default=(256, 256))
+    parser.add_argument("--crop_size", default=256)
     
     # Gaussian perturbation
     parser.add_argument("--std", type=float, default=0.0,
@@ -177,6 +147,10 @@ def _get_argparser():
                         help="test mean in gaussian perturbation (default: 0)") 
     
     # Train options
+    parser.add_argument("--use_true_anchor", action='store_true',
+                        help="train true anchor box train semantic segmentation (default: false)")
+    parser.add_argument("--use_true_anchor_val", action='store_true',
+                        help="validate with true anchor box train semantic segmentation (default: false)")
     parser.add_argument("--random_seed", type=int, default=1,
                         help="random seed (default: 1)")
     parser.add_argument("--total_itrs", type=int, default=2500,
@@ -195,36 +169,28 @@ def _get_argparser():
                         help="optimizer (default: SGD)")
     parser.add_argument("--loss_type", type=str, default='entropydice',
                         help="criterion (default: ce+dl)")
+    parser.add_argument("--ewu", action='store_true',
+                        help="weight update for entrpy + dice loss (default: false)")
     parser.add_argument("--vit_loss_type", type=str, default='crossentropy',
                         help="vit criterion (default: CrossEntropy)")
     parser.add_argument("--batch_size", type=int, default=32,
                         help='batch size (default: 32)')
-    parser.add_argument("--vit_batch_size", type=int, default=32,
-                        help='vit batch size (default: 32)')
-    parser.add_argument("--exp_itr", type=int, default=20,
-                        help='repeat N-identical experiments (default: 20)')
+    parser.add_argument("--exp_itr", type=int, default=10,
+                        help='repeat N-identical experiments (default: 10)')
 
     # Validate options
-    parser.add_argument("--val_interval", type=int, default=1,
-                        help="epoch interval for eval (default: 1)")
-    parser.add_argument("--val_batch_size", type=int, default=4,
-                        help='batch size for validate (default: 4)') 
-    parser.add_argument("--val_vit_batch_size", type=int, default=4,
-                        help='batch size for vit validate (default: 4)') 
+    parser.add_argument("--val_batch_size", type=int, default=16,
+                        help='batch size for validate (default: 16)') 
 
     # Early stop options
-    parser.add_argument("--patience", type=int, default=100,
+    parser.add_argument("--patience", type=int, default=200,
                         help="Number of epochs with no improvement after which training will be stopped (default: 100)")
     parser.add_argument("--delta", type=float, default=0.001,
                         help="Minimum change in the monitored quantity to qualify as an improvement (default: 0.001)")
     
     # Test options
-    parser.add_argument("--test_interval", type=int, default=1,
-                        help="epoch interval for test (default: 1)")
-    parser.add_argument("--test_batch_size", type=int, default=4,
-                        help='batch size for test (default: 4)')
-    parser.add_argument("--test_vit_batch_size", type=int, default=4,
-                        help='vit batch size for test (default: 4)')
+    parser.add_argument("--test_batch_size", type=int, default=16,
+                        help='batch size for test (default: 16)')
     parser.add_argument("--save_test_results", action='store_false',
                         help='save test results to \"./test\" (default: True)')
     parser.add_argument("--test_results_dir", type=str, default='/',

@@ -93,14 +93,24 @@ def exp(opts):
 
 if __name__ == '__main__':
     from args_vcs import get_argparser, save_argparser
-
+    '''
+    01 - true anchor + weight update (192, 256) > (128, 256) > (256, 256)
+    02 - pred anchor + weight update (192, 256) > (128, 256) > (256, 256)
+    03 - true anchor + no weight update (192, 256) > (128, 256) > (256, 256)
+    04 - pred anchor + no weight update (192, 256) > (128, 256) > (256, 256)
+    (weight update in segmentation loss: entropy+dice)
+    '''
     total_time = datetime.now()
     try:
         is_error = False
-        short_memo = ['vit segmentation pioneer study with pred anchor']
+        
+        short_memo = ['01 vit+segmentation crop size (128, 256)']
+        cs = [ (128, 256) ]
+
         for i in range(len(short_memo)):
             opts = get_argparser()
             opts.short_memo = short_memo[i]
+            opts.crop_size = cs[i]
             exp(opts)
         
     except KeyboardInterrupt:

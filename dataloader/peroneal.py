@@ -53,7 +53,7 @@ class Peroneal(data.Dataset):
 
         return img, target
 
-    def __init__(self, root, datatype='CPN', dver='splits', image_set='train', 
+    def __init__(self, root, datatype='cpn', dver='splits', image_set='train', 
                     transform=None, in_channels=3, image_patch_size=(64, 64), **kwargs):
         self.root = root
         self.datatype = datatype
@@ -66,8 +66,13 @@ class Peroneal(data.Dataset):
 
         image_dir = os.path.join(self.root, self.datatype, 'Images')
         mask_dir = os.path.join(self.root, self.datatype, 'Masks')
-        split_f = os.path.join(self.root, self.datatype, self.dver, self.image_set.rstrip('\n') + '.txt')
         
+        if self.image_set == 'train' or self.image_set == 'val':
+            split_f = os.path.join(self.root, self.datatype, self.dver, 
+                                    kwargs["cur_time"], kwargs["rid"], self.image_set.rstrip('\n') + '.txt')
+        else:
+            split_f = os.path.join(self.root, self.datatype, self.dver, self.image_set.rstrip('\n') + '.txt')
+
         if not os.path.exists(image_dir) or not os.path.exists(mask_dir):
             raise Exception('Dataset not found or corrupted.')
     

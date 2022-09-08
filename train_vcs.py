@@ -15,6 +15,21 @@ from metrics import StreamSegMetrics
 from metrics import ClsMetrics
 from utils import ext_transforms as et
 
+def get_class_weight(lbls):
+    '''
+    compute class weight (only binary)
+        Args:
+            lbls (numpy array)
+        Returns:
+            weight (numpy array)
+    '''
+    weights = lbls.sum() / (lbls.shape[0] * lbls.shape[1] * lbls.shape[2])
+    
+    if weights < 0 or weights > 1:
+        raise Exception (f'weights: {weights} for cross entropy is wrong')
+
+    return [weights, 1 - weights]
+
 def add_writer_scalar(writer, phase, score, loss, epoch):
     writer.add_scalar(f'IoU BG/{phase}', score['Class IoU'][0], epoch)
     writer.add_scalar(f'IoU Nerve/{phase}', score['Class IoU'][1], epoch)
@@ -22,7 +37,7 @@ def add_writer_scalar(writer, phase, score, loss, epoch):
     writer.add_scalar(f'Dice Nerve/{phase}', score['Class F1'][1], epoch)
     writer.add_scalar(f'epoch loss/{phase}', loss, epoch)
 
-def add_writer_vit_scalar(writer, phase, score, loss, epoch, num_classes):
+def add_writer_vit_scalar(writer, phase, score, loss, epoch, total_itrs, num_classes):
     
     writer.add_scalar(f'vit/epoch loss/cls {num_classes}/{phase}', loss, epoch)
     writer.add_scalar(f'vit/epoch Overall Acc/cls {num_classes}/{phase}', score['Overall Acc'], epoch)
@@ -30,7 +45,7 @@ def add_writer_vit_scalar(writer, phase, score, loss, epoch, num_classes):
     for i in range(num_classes):
         writer.add_scalar(f'vit/f1 score/cls {num_classes}/{i}/{phase}', score['Class F1'][i], epoch)
 
-    print(f'[{phase}-vit]\t {epoch+1}/2500 Overall Acc: {score["Overall Acc"]:.4f}, loss: {loss:.4f}')
+    print(f'[{phase}-vit]\t {epoch}/{total_itrs} Overall Acc: {score["Overall Acc"]:.4f}, loss: {loss:.4f}')
 
 def print_result(phase, score, epoch, total_itrs, loss):
     print("[{}] Epoch: {}/{} Loss: {:.5f}".format(phase, epoch, total_itrs, loss))
@@ -38,7 +53,7 @@ def print_result(phase, score, epoch, total_itrs, loss):
     print("\tIoU[0]: {:.5f} [1]: {:.5f}".format(score['Class IoU'][0], score['Class IoU'][1]))
     print("\tOverall Acc: {:.3f}, Mean Acc: {:.3f}".format(score['Overall Acc'], score['Mean Acc']))
 
-def get_dataset(opts):
+def get_dataset(opts, run_id):
     mean = [0.485, 0.456, 0.406] if (opts.in_channels == 3) else [0.485]
     std = [0.229, 0.224, 0.225] if (opts.in_channels == 3) else [0.229]
 
@@ -60,20 +75,23 @@ def get_dataset(opts):
         
     train_dst = dataloader.loader.__dict__[opts.dataset]( 
         pth = os.path.join(opts.data_root, opts.dataset, opts.dataset_ver), tvs = opts.tvs, mkset = True,
+        cur_time=opts.current_time, rid=run_id,
         root=opts.data_root, datatype=opts.dataset, dver=opts.dataset_ver, 
         image_set='train', transform=train_transform, in_channels=opts.in_channels,
         image_patch_size=(opts.vit_patch_size, opts.vit_patch_size))
 
     val_dst = dataloader.loader.__dict__[opts.dataset]( 
         pth = os.path.join(opts.data_root, opts.dataset, opts.dataset_ver), tvs = opts.tvs, mkset = False,
+        cur_time = opts.current_time, rid=run_id,
         root=opts.data_root, datatype=opts.dataset, dver=opts.dataset_ver, 
-        image_set='val', transform=train_transform, in_channels=opts.in_channels,
+        image_set='val', transform=val_transform, in_channels=opts.in_channels,
         image_patch_size=(opts.vit_patch_size, opts.vit_patch_size) )
 
     test_dst = dataloader.loader.__dict__[opts.dataset]( 
         pth = os.path.join(opts.data_root, opts.dataset, opts.dataset_ver), tvs = opts.tvs, mkset = False,
+        cur_time = opts.current_time, rid=run_id,
         root=opts.data_root, datatype=opts.dataset, dver=opts.dataset_ver, 
-        image_set='test', transform=train_transform, in_channels=opts.in_channels,
+        image_set='test', transform=test_transform, in_channels=opts.in_channels,
         image_patch_size=(opts.vit_patch_size, opts.vit_patch_size) )
 
     print("Dataset - %s\n\tTrain\t%d\n\tVal\t%d\n\tTest\t%d" % 
@@ -154,7 +172,6 @@ def set_optim(opts, model_name, model):
     return optimizer, scheduler
 
 def crop(ims, bboxs, mas, patch_size, crop_size=256):
-
     if isinstance(crop_size, numbers.Number):
         crop_size = (int(crop_size), int(crop_size))
     else:
@@ -348,7 +365,8 @@ def recover(mask_shape, anchor, cmask, patch_size, crop_size=256, print_anchor=F
 
 def train(devices, loader, Snet, Vnet, nSloss, nVloss,
             Soptimizer, Sscheduler, Voptimizer, Vscheduler, 
-            patch_size, crop_size, seg_metrics, vit_metrics, **kwargs):
+            patch_size, crop_size, seg_metrics, vit_metrics, 
+            use_true_anchor, ewu, **kwargs):
 
     Snet.train()
     Vnet.train()
@@ -382,8 +400,12 @@ def train(devices, loader, Snet, Vnet, nSloss, nVloss,
         Voptimizer.step()
         vit_running_loss += vit_loss.item() * image.size(0)
 
-        cimage, cmask = crop(image.detach().cpu().numpy(), anchor_pred, 
-                            mask, patch_size, crop_size)
+        if use_true_anchor:
+            cimage, cmask = crop(image.detach().cpu().numpy(), anchor_true, 
+                                mask, patch_size, crop_size)
+        else:
+            cimage, cmask = crop(image.detach().cpu().numpy(), anchor_pred, 
+                                mask, patch_size, crop_size)
         cimage = cimage.to(devices)
         cmask = cmask.to(devices)
 
@@ -392,11 +414,19 @@ def train(devices, loader, Snet, Vnet, nSloss, nVloss,
         Sprob = nn.Softmax(dim=1)(Soutput)
         seg_pred = torch.max(Sprob, 1)[1].detach().cpu().numpy()
         seg_true = cmask.detach().cpu().numpy()
-        overlay = recover(mask.shape, anchor_pred, seg_pred, patch_size, crop_size, False)
+
+        if use_true_anchor:
+            overlay = recover(mask.shape, anchor_true, seg_pred, patch_size, crop_size, False)
+        else:
+            overlay = recover(mask.shape, anchor_pred, seg_pred, patch_size, crop_size, False)
         seg_metrics.update(mask, overlay)
 
         Soptimizer.zero_grad()
-        if nSloss == 'entropydice':
+        if nSloss == 'entropydice' and ewu:
+            cls_weight = torch.tensor(get_class_weight(seg_true), dtype=torch.float32).to(devices)
+            Sloss.update_weight(weight=cls_weight)
+            seg_loss = Sloss(Soutput, cmask)
+        elif nSloss == 'entropydice':
             seg_loss = Sloss(Soutput, cmask)
         else:
             raise Exception (f'{nSloss} is not option')
@@ -416,7 +446,8 @@ def train(devices, loader, Snet, Vnet, nSloss, nVloss,
     return seg_score, vit_score, seg_epoch_loss, vit_epoch_loss
 
 def validate(devices, loader, Snet, Vnet, nSloss, nVloss,
-            patch_size, crop_size, seg_metrics, vit_metrics, **kwargs):
+            patch_size, crop_size, seg_metrics, vit_metrics,
+            use_true_anchor, ewu, **kwargs):
 
     Snet.eval()
     Vnet.eval()
@@ -448,8 +479,12 @@ def validate(devices, loader, Snet, Vnet, nSloss, nVloss,
                 raise Exception (f'{nVloss} is not option')
             vit_running_loss += vit_loss.item() * image.size(0)
 
-            cimage, cmask = crop(image.detach().cpu().numpy(), anchor_pred, 
-                                mask, patch_size, crop_size)
+            if use_true_anchor:
+                cimage, cmask = crop(image.detach().cpu().numpy(), anchor_true, 
+                                    mask, patch_size, crop_size)
+            else:
+                cimage, cmask = crop(image.detach().cpu().numpy(), anchor_pred, 
+                                    mask, patch_size, crop_size)
             cimage = cimage.to(devices)
             cmask = cmask.to(devices)
 
@@ -458,10 +493,18 @@ def validate(devices, loader, Snet, Vnet, nSloss, nVloss,
             Sprob = nn.Softmax(dim=1)(Soutput)
             seg_pred = torch.max(Sprob, 1)[1].detach().cpu().numpy()
             seg_true = cmask.detach().cpu().numpy()
-            overlay = recover(mask.shape, anchor_pred, seg_pred, patch_size, crop_size, False)
+
+            if use_true_anchor:
+                overlay = recover(mask.shape, anchor_true, seg_pred, patch_size, crop_size, False)
+            else:
+                overlay = recover(mask.shape, anchor_pred, seg_pred, patch_size, crop_size, False)
             seg_metrics.update(mask, overlay)
 
-            if nSloss == 'entropydice':
+            if nSloss == 'entropydice' and ewu:
+                cls_weight = torch.tensor(get_class_weight(seg_true), dtype=torch.float32).to(devices)
+                Sloss.update_weight(weight=cls_weight)
+                seg_loss = Sloss(Soutput, cmask)
+            elif nSloss == 'entropydice':
                 seg_loss = Sloss(Soutput, cmask)
             else:
                 raise Exception (f'{nSloss} is not option')
@@ -476,7 +519,7 @@ def validate(devices, loader, Snet, Vnet, nSloss, nVloss,
     return seg_score, vit_score, seg_epoch_loss, vit_epoch_loss
 
 def save(devices, loader, Snet, Vnet,
-            patch_size, crop_size, path, writer, run_id, save_bmp=False):
+            patch_size, crop_size, path, writer, run_id, use_true_anchor):
     from PIL import Image
     def cmap(N=3, pred=True):
         """
@@ -496,11 +539,6 @@ def save(devices, loader, Snet, Vnet,
     except:
         raise Exception("Cannot make directory: {}".format(path))
     
-    if isinstance(crop_size, numbers.Number):
-        crop_size = (int(crop_size), int(crop_size))
-    else:
-        crop_size = crop_size
-    
     denorm = utils.Denormalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     
     Snet.eval()
@@ -515,9 +553,14 @@ def save(devices, loader, Snet, Vnet,
             Voutput = Vnet(image)
             Vprob = nn.Softmax(dim=1)(Voutput)
             anchor_pred = torch.max(Vprob, 1)[1].detach().cpu().numpy()
+            anchor_true = anchor.detach().cpu().numpy()
 
-            cimage, cmask = crop(image.detach().cpu().numpy(), anchor_pred, 
-                                mask.detach().cpu().numpy(), patch_size, crop_size)
+            if use_true_anchor:
+                cimage, cmask = crop(image.detach().cpu().numpy(), anchor_true, 
+                                    mask.detach().cpu().numpy(), patch_size, crop_size)
+            else:
+                cimage, cmask = crop(image.detach().cpu().numpy(), anchor_pred, 
+                                    mask.detach().cpu().numpy(), patch_size, crop_size)
             cimage = cimage.to(devices)
             cmask = cmask.to(devices)
 
@@ -528,12 +571,13 @@ def save(devices, loader, Snet, Vnet,
 
             image = image.detach().cpu().numpy()
             mask = mask.detach().cpu().numpy()
-            anchor_true = anchor.detach().cpu().numpy()
-
-            pred_overlay = recover(mask.shape, anchor_pred, seg_pred, patch_size, 256, True)
-            true_overlay = recover(mask.shape, anchor_true, mask, patch_size, 256, True)
-
-            img_batch = np.zeros(image.shape)
+            
+            if use_true_anchor:
+                pred_overlay = recover(mask.shape, anchor_true, seg_pred, patch_size, crop_size, True)
+                true_overlay = recover(mask.shape, anchor_true, mask, patch_size, crop_size, True)
+            else:
+                pred_overlay = recover(mask.shape, anchor_pred, seg_pred, patch_size, crop_size, True)
+                true_overlay = recover(mask.shape, anchor_true, mask, patch_size, crop_size, True)
             tar_img = (denorm(image) * 255).transpose(0, 2, 3, 1)
             tar_mask = (cmp_pred[pred_overlay] + cmp_true[true_overlay])
             result = (tar_img * 0.5 + tar_mask * 0.5).astype(np.uint8)
@@ -566,7 +610,7 @@ def experiments(opts, run_id) -> dict:
     ##################################################
     ### (1) Load datasets                          ###
     ##################################################
-    train_dst, val_dst, test_dst = get_dataset(opts)
+    train_dst, val_dst, test_dst = get_dataset(opts, RUN_ID)
     train_loader = DataLoader(train_dst, batch_size=opts.batch_size, 
                                 num_workers=opts.num_workers, shuffle=True, drop_last=True)
     val_loader = DataLoader(val_dst, batch_size=opts.val_batch_size, 
@@ -630,37 +674,40 @@ def experiments(opts, run_id) -> dict:
             nSloss=opts.loss_type, nVloss=opts.vit_loss_type, 
             Soptimizer=Soptim, Sscheduler=Ssche, 
             Voptimizer=Voptim, Vscheduler=Vsche,
-            patch_size=opts.vit_patch_size, crop_size=256, 
-            seg_metrics=seg_metrics, vit_metrics=vit_metrics, 
+            patch_size=opts.vit_patch_size, crop_size=opts.crop_size, 
+            seg_metrics=seg_metrics, vit_metrics=vit_metrics,
+            use_true_anchor=opts.use_true_anchor, ewu=opts.ewu,
             opts=opts 
             )
         print_result('train', seg_score, epoch, opts.total_itrs, seg_epoch_loss)
         add_writer_scalar(writer, 'train', seg_score, seg_epoch_loss, epoch)
-        add_writer_vit_scalar(writer, 'train', vit_score, vit_epoch_loss, epoch, opts.vit_num_classes) 
+        add_writer_vit_scalar(writer, 'train', vit_score, vit_epoch_loss, epoch, opts.total_itrs, opts.vit_num_classes) 
 
         val_seg_score, val_vit_score, val_seg_epoch_loss, val_vit_epoch_loss = validate(
             devices=devices, loader=val_loader, 
             Snet=segnet, Vnet=vitnet, 
             nSloss=opts.loss_type, nVloss=opts.vit_loss_type, 
-            patch_size=opts.vit_patch_size, crop_size=256, 
-            seg_metrics=seg_metrics, vit_metrics=vit_metrics, 
+            patch_size=opts.vit_patch_size, crop_size=opts.crop_size, 
+            seg_metrics=seg_metrics, vit_metrics=vit_metrics,
+            use_true_anchor=opts.use_true_anchor_val, ewu=opts.ewu,
             opts=opts 
             )
         print_result('val', val_seg_score, epoch, opts.total_itrs, val_seg_epoch_loss)
         add_writer_scalar(writer, 'val', val_seg_score, val_seg_epoch_loss, epoch)
-        add_writer_vit_scalar(writer, 'val', val_vit_score, val_vit_epoch_loss, epoch, opts.vit_num_classes)
+        add_writer_vit_scalar(writer, 'val', val_vit_score, val_vit_epoch_loss, epoch, opts.total_itrs, opts.vit_num_classes)
 
         test_seg_score, test_vit_score, test_seg_epoch_loss, test_vit_epoch_loss = validate(
             devices=devices, loader=test_loader, 
             Snet=segnet, Vnet=vitnet, 
             nSloss=opts.loss_type, nVloss=opts.vit_loss_type, 
-            patch_size=opts.vit_patch_size, crop_size=256, 
+            patch_size=opts.vit_patch_size, crop_size=opts.crop_size, 
             seg_metrics=seg_metrics, vit_metrics=vit_metrics, 
+            use_true_anchor=opts.use_true_anchor_val, ewu=opts.ewu,
             opts=opts 
             )
         print_result('test', test_seg_score, epoch, opts.total_itrs, test_seg_epoch_loss)
         add_writer_scalar(writer, 'test', test_seg_score, test_seg_epoch_loss, epoch)
-        add_writer_vit_scalar(writer, 'test', test_vit_score, test_vit_epoch_loss, epoch, opts.vit_num_classes)
+        add_writer_vit_scalar(writer, 'test', test_vit_score, test_vit_epoch_loss, epoch, opts.total_itrs, opts.vit_num_classes)
         
         if seg_early_stopping(test_seg_score['Class F1'][1], segnet, Soptim, Ssche, epoch):
             seg_best_epoch = epoch
@@ -690,7 +737,8 @@ def experiments(opts, run_id) -> dict:
 
     sdir = os.path.join(opts.test_results_dir, RUN_ID, f'epoch_{seg_best_epoch}')
     save(devices, test_loader, segnet, vitnet, 
-            patch_size=opts.vit_patch_size, crop_size=256, path=sdir, writer=writer, run_id=RUN_ID, save_bmp=False)
+            patch_size=opts.vit_patch_size, crop_size=opts.crop_size, 
+            path=sdir, writer=writer, run_id=RUN_ID, use_true_anchor=opts.use_true_anchor_val)
 
     del checkpoint
     del segnet
